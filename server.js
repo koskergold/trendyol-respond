@@ -11,18 +11,25 @@ const trendyolPass = process.env.TRENDYOL_PASS;
 const respondChannelId = process.env.RESPOND_CHANNEL_ID;
 const respondApiToken = process.env.RESPOND_API_TOKEN;
 
-// Sağlık kontrolü
-app.get('/', (req, res) => res.send('OK'));
+// Servis ayakta mı kontrol
+app.get('/', (req, res) => {
+  res.send('OK');
+});
 
-// Aynı soruyu iki kez göndermemek için basit hafıza
+// Aynı soruyu iki kez göndermemek için
 const sentQuestionIds = new Set();
 
-// Trendyol: cevap bekleyen soruları çek
+// Trendyol’dan cevap bekleyen soruları çek
 async function fetchWaitingQuestions() {
   const url = `https://apigw.trendyol.com/integration/question-answer/sellers/${supplierId}/questions?status=WAITING_FOR_ANSWER`;
+
   const res = await axios.get(url, {
-    auth: { username: trendyolUser, password: trendyolPass }
+    auth: {
+      username: trendyolUser,
+      password: trendyolPass
+    }
   });
+
   return res.data?.content || [];
 }
 
@@ -32,46 +39,62 @@ async function sendToRespond(question) {
     `https://api.respond.io/v1/messages`,
     {
       channelId: respondChannelId,
-      contact: { id: `trendyol_${question.id}` },
-      message: { type: 'text', text: question.text }
+      contact: {
+        id: `trendyol_${question.id}`
+      },
+      message: {
+        type: 'text',
+        text: question.text
+      }
     },
-    { headers: { Authorization: `Bearer ${respondApiToken}` } }
+    {
+      headers: {
+        Authorization: `Bearer ${respondApiToken}`
+      }
+    }
   );
+
+  console.log('Respond’a gönderildi:', question.id);
 }
 
-// 10 sn’de bir Trendyol sorularını çek
+// Her 10 saniyede Trendyol’u kontrol et
 async function pollLoop() {
   try {
     const questions = await fetchWaitingQuestions();
+
     for (const q of questions) {
       if (!q?.id) continue;
       if (sentQuestionIds.has(q.id)) continue;
 
       await sendToRespond(q);
       sentQuestionIds.add(q.id);
-      console.log('Respond’a gönderildi:', q.id);
     }
   } catch (err) {
     console.error('Poll hatası:', err?.response?.data || err.message);
   }
 }
+
 setInterval(pollLoop, 10000);
 
-// Respond’dan ajan cevap yazınca Trendyol’a bas
+// Respond’dan cevap gelince Trendyol’a yaz
 app.post('/respond-webhook', async (req, res) => {
   try {
-    const { contact, message } = req.body || {};
-    const questionId = (contact?.id || '').replace('trendyol_', '');
-    const text = message?.text;
+    const { contact, message } = req.body;
 
-    if (!questionId || !text) return res.sendStatus(200);
+    const questionId = contact.id.replace('trendyol_', '');
+    const text = message.text;
 
-    const url = `https://apigw.trendyol.com/integration/qna/sellers/${supplierId}/questions/${questionId}/answers`;
+    const url = `https://apigw.trendyol.com/integration/question-answer/sellers/${supplierId}/questions/${questionId}/answers`;
 
     await axios.post(
       url,
       { text },
-      { auth: { username: trendyolUser, password: trendyolPass } }
+      {
+        auth: {
+          username: trendyolUser,
+          password: trendyolPass
+        }
+      }
     );
 
     console.log('Trendyol’a cevap yazıldı:', questionId);
@@ -83,4 +106,6 @@ app.post('/respond-webhook', async (req, res) => {
 });
 
 const port = process.env.PORT || 3000;
-app.listen(port, () => console.log('Running on', port));
+app.listen(port, () => {
+  console.log('Running on port', port);
+});
