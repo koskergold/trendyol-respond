@@ -19,7 +19,7 @@ const sentQuestionIds = new Set();
 
 // Trendyol: cevap bekleyen soruları çek
 async function fetchWaitingQuestions() {
-  const url = `https://apigw.trendyol.com/integration/qna/sellers/${supplierId}/questions/filter?status=WAITING_FOR_ANSWER`;
+  const url = https://apigw.trendyol.com/integration/question-answer/sellers/${supplierId}/questions?status=WAITING_FOR_ANSWER;
   const res = await axios.get(url, {
     auth: { username: trendyolUser, password: trendyolPass }
   });
